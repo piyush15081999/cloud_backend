@@ -13,41 +13,47 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    - name: Set Up SSH Key
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+    - name: Clean previous deployment on EC2
+      uses: appleboy/ssh-action@v0.1.6
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          rm -rf /home/ec2-user/cloud_backend
+          mkdir -p /home/ec2-user/cloud_backend
 
-    - name: Deploy and Restart Flask on EC2
-      run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          cd /home/ec2-user
+    - name: Upload code to EC2
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "."
+        target: "/home/ec2-user/cloud_backend"
 
-          # Clone repo if not exists
-          if [ ! -d "cloud_backend" ]; then
-            git clone https://github.com/piyush15081999/cloud_backend.git
-          else
-            cd cloud_backend
-            git pull origin main
-          fi
-
-          cd cloud_backend
+    - name: SSH and Deploy Flask App
+      uses: appleboy/ssh-action@v0.1.6
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /home/ec2-user/cloud_backend
 
           # Create Python 3.11 virtual environment if not exists
           if [ ! -d "venv" ]; then
             python3.11 -m venv venv
           fi
 
-          # Activate environment and install dependencies
+          # Activate virtual environment and install requirements
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
 
-          # Kill previous Flask app
-          pkill -f "python app.py" || echo "No existing Flask process found."
+          # Kill previous Flask process (if running)
+          pkill -f "python app.py" || echo "No running app to kill."
 
           # Start Flask app
           nohup python app.py --host=0.0.0.0 --port=5000 > flask.log 2>&1 &
-        EOF
+          echo "🚀 Flask app restarted successfully."
