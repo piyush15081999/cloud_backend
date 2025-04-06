@@ -3,7 +3,7 @@ name: Deploy Flask Backend to EC2
 on:
   push:
     branches:
-      - main  # Trigger on push to the main branch
+      - main
 
 jobs:
   deploy:
@@ -23,29 +23,31 @@ jobs:
     - name: Deploy and Restart Flask on EC2
       run: |
         ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          # Go to project directory (change if needed)
-          cd /home/ec2-user/cloud_backend
+          cd /home/ec2-user
 
-          # Pull latest code from GitHub
-          git pull origin main
+          # Clone repo if not exists
+          if [ ! -d "cloud_backend" ]; then
+            git clone https://github.com/piyush15081999/cloud_backend.git
+          else
+            cd cloud_backend
+            git pull origin main
+          fi
+
+          cd cloud_backend
 
           # Create Python 3.11 virtual environment if not exists
           if [ ! -d "venv" ]; then
             python3.11 -m venv venv
           fi
 
-          # Activate environment
+          # Activate environment and install dependencies
           source venv/bin/activate
-
-          # Install requirements
           pip install --upgrade pip
           pip install -r requirements.txt
 
-          # Kill previous app instance
+          # Kill previous Flask app
           pkill -f "python app.py" || echo "No existing Flask process found."
 
           # Start Flask app
           nohup python app.py --host=0.0.0.0 --port=5000 > flask.log 2>&1 &
         EOF
-
-
