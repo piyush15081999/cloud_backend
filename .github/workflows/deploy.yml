@@ -31,9 +31,6 @@ jobs:
             echo "🔁 Cloning latest repo..."
             git clone https://github.com/piyush15081999/cloud_backend.git /home/ec2-user/cloud_backend
 
-            echo "🛑 Killing any existing Flask app..."
-            pkill -f "python app.py" || true
-
             echo "🐍 Creating virtual environment..."
             cd /home/ec2-user/cloud_backend
             python3.11 -m venv venv
@@ -44,12 +41,17 @@ jobs:
             echo "📦 Installing dependencies..."
             pip install --upgrade pip
             pip install -r requirements.txt
+            pip install boto3 requests
+
+            echo "🛑 Killing existing Flask and Cloud IDS processes..."
+            pkill -f "python app.py" || echo "No app running"
+            pkill -f "cloud_ids_predictor.py" || echo "No IDS script running"
 
             echo "🚀 Starting Flask app..."
             nohup python app.py --host=0.0.0.0 --port=5000 > flask.log 2>&1 & disown
 
-            echo "✅ Deployment complete!"
+            echo "🛡️ Starting Cloud IDS Predictor..."
+            nohup python cloud_ids_predictor.py > ids.log 2>&1 & disown
+
+            echo "✅ All services started successfully."
           EOF
-
-
-

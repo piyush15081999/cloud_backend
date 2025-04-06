@@ -3,3 +3,4 @@ flask_cors
 joblib
 pandas
 scikit-learn
+boto3
