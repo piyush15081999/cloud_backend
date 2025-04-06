@@ -8,7 +8,7 @@ LOG_STREAM_NAME = 'eni-051f33bea4b62cb7b-all'  # Log stream name
 FLASK_API_URL = 'http://16.16.253.44:5000/predict'  # Flask API URL
 
 # ========== AWS CLIENT ==========
-logs_client = boto3.client('logs')
+logs_client = boto3.client('logs', region_name='eu-north-1')
 
 # ========== FULL FEATURE SET ==========
 original_feature_columns = [
