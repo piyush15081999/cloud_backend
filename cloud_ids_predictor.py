@@ -5,10 +5,13 @@ import time
 # ========== CONFIGURATION ==========
 LOG_GROUP_NAME = 'cloudloggroup'  # CloudWatch log group name
 LOG_STREAM_NAME = 'eni-051f33bea4b62cb7b-all'  # Log stream name
-FLASK_API_URL = 'http://16.16.253.44:5000/predict'  # Flask API URL
+FLASK_API_URL = 'http://16.16.253.44:5000/predict'  # Flask API endpoint
+REGION = 'eu-north-1'
+SECURITY_GROUP_ID = 'sg-0c40ee75327cf6eed'  # Your Security Group ID
 
-# ========== AWS CLIENT ==========
-logs_client = boto3.client('logs', region_name='eu-north-1')
+# ========== AWS CLIENTS ==========
+logs_client = boto3.client('logs', region_name=REGION)
+ec2_client = boto3.client('ec2', region_name=REGION)
 
 # ========== FULL FEATURE SET ==========
 original_feature_columns = [
@@ -33,19 +36,32 @@ original_feature_columns = [
     "Idle Mean", "Idle Std", "Idle Max", "Idle Min"
 ]
 
+# ========== BLOCK MALICIOUS IP ==========
+def block_ip(ip_address):
+    try:
+        ec2_client.revoke_security_group_ingress(
+            GroupId=SECURITY_GROUP_ID,
+            IpProtocol='-1',
+            CidrIp=f"{ip_address}/32"
+        )
+        print(f"🚫 Blocked malicious IP via Security Group: {ip_address}")
+    except Exception as e:
+        print(f"❌ Failed to block IP {ip_address}: {e}")
+
 # ========== FETCH LOG EVENTS ==========
 def fetch_log_events():
     response = logs_client.get_log_events(
         logGroupName=LOG_GROUP_NAME,
         logStreamName=LOG_STREAM_NAME,
-        startFromHead=False  # Get newest logs
+        startFromHead=False  # Get latest logs
     )
     return [event['message'] for event in response['events']]
 
-# ========== PARSE VPC LOG TO FULL FEATURE SET ==========
+# ========== PARSE LOG LINE ==========
 def parse_log_to_features(log_line):
     try:
         parts = log_line.split()
+        src_ip = parts[3]
         protocol = int(parts[7])
         packets = int(parts[8])
         bytes_transferred = int(parts[9])
@@ -53,7 +69,6 @@ def parse_log_to_features(log_line):
         end = int(parts[11])
         duration = end - start if end > start else 1
 
-        # Fill what we can from real data
         base_features = {
             "Protocol": protocol,
             "Flow Duration": duration,
@@ -65,24 +80,22 @@ def parse_log_to_features(log_line):
             "Flow Packets/s": packets / duration
         }
 
-        # Fill rest with 0s to match model input
         for col in original_feature_columns:
             if col not in base_features:
                 base_features[col] = 0
 
-        # Return dict with proper order
         ordered_features = {k: base_features[k] for k in original_feature_columns}
-        return ordered_features
+        return ordered_features, src_ip
 
     except Exception as e:
         print(f"⚠️ Error parsing log line: {e}")
-        return None
+        return None, None
 
-# ========== CALL FLASK API ==========
+# ========== PREDICT USING API ==========
 def predict_with_model(features):
     try:
         response = requests.post(FLASK_API_URL, json=features, timeout=5)
-        print("📨 API Response:", response.status_code, response.text)  # <-- ADD THIS LINE
+        print("📨 API Response:", response.status_code, response.text)
         if response.status_code == 200:
             return response.json().get("prediction")
         else:
@@ -90,15 +103,18 @@ def predict_with_model(features):
     except Exception as e:
         return f"Request failed: {e}"
 
-
-# ========== MAIN ==========
+# ========== MAIN LOOP ==========
 if __name__ == "__main__":
     print("📡 Fetching VPC flow logs...")
     logs = fetch_log_events()
 
     for log in logs:
-        features = parse_log_to_features(log)
+        features, src_ip = parse_log_to_features(log)
         if features:
             prediction = predict_with_model(features)
-            print(f"🧠 Prediction: {prediction} | Log: {log}")
-            time.sleep(1)  # Optional delay to avoid hitting API too fast
+            print(f"🧠 Prediction: {prediction} | Source IP: {src_ip} | Log: {log}")
+
+            if prediction == "Malicious" and src_ip:
+                block_ip(src_ip)
+
+            time.sleep(1)  # Prevent API spamming
