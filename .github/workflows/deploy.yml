@@ -3,7 +3,7 @@ name: Deploy Flask Backend to EC2
 on:
   push:
     branches:
-      - main
+      - main  # Trigger on push to the main branch
 
 jobs:
   deploy:
@@ -54,6 +54,7 @@ jobs:
           # Kill previous Flask process (if running)
           pkill -f "python app.py" || echo "No running app to kill."
 
-          # Start Flask app
-          nohup python app.py --host=0.0.0.0 --port=5000 > flask.log 2>&1 &
+          # Start Flask app in background and detach it
+          nohup python app.py --host=0.0.0.0 --port=5000 > flask.log 2>&1 & disown
+
           echo "🚀 Flask app restarted successfully."
