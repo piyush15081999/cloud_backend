@@ -52,8 +52,8 @@ def predict():
         input_scaled = scaler.transform(input_df)
         input_pca = pca.transform(input_scaled)
 
-        # Predict
-        prediction = rf_model.predict(input_pca)[0]
+        # Predict and convert to native int
+        prediction = int(rf_model.predict(input_pca)[0])
         predicted_label = label_mapping[prediction]
 
         return jsonify({"prediction": predicted_label})
