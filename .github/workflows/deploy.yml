@@ -23,18 +23,19 @@ jobs:
       - name: 🚀 Deploy on EC2
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e  # exit on any error
 
             echo "📦 Removing old project..."
             rm -rf /home/ec2-user/cloud_backend
 
             echo "🔁 Cloning latest repo..."
             git clone https://github.com/piyush15081999/cloud_backend.git /home/ec2-user/cloud_backend
-            cd /home/ec2-user/cloud_backend
 
             echo "🛑 Killing any existing Flask app..."
             pkill -f "python app.py" || true
 
             echo "🐍 Creating virtual environment..."
+            cd /home/ec2-user/cloud_backend
             python3.11 -m venv venv
 
             echo "⚙️ Activating environment..."
