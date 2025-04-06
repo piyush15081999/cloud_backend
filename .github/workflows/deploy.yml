@@ -34,7 +34,7 @@ jobs:
             echo "🛑 Killing any existing Flask app..."
             pkill -f "python app.py" || true
 
-            echo "🐍 Creating virtual environment (if not exists)..."
+            echo "🐍 Creating virtual environment..."
             python3.11 -m venv venv
 
             echo "⚙️ Activating environment..."
