@@ -6,14 +6,14 @@ import pandas as pd
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend communication
+CORS(app)
 
-# Load the trained Random Forest model, Scaler, and PCA
+# Load trained model and preprocessing objects
 rf_model = joblib.load("random_forest_model.pkl")
 scaler = joblib.load("scaler.pkl")
 pca = joblib.load("pca.pkl")
 
-# Define feature columns (excluding label)
+# Feature columns expected by the model
 feature_columns = [
     "Protocol", "Flow Duration", "Total Fwd Packets", "Total Backward Packets",
     "Fwd Packets Length Total", "Bwd Packets Length Total", "Fwd Packet Length Max",
@@ -36,31 +36,26 @@ feature_columns = [
     "Idle Mean", "Idle Std", "Idle Max", "Idle Min"
 ]
 
-# Label Mapping
-label_mapping = {0: "Benign", 1: "Malicious"}
-
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # Get JSON data from request
         data = request.json
-
-        # Convert JSON input to DataFrame
         input_df = pd.DataFrame([data], columns=feature_columns)
 
-        # Preprocess input: Standardization & PCA
+        # Preprocessing
         input_scaled = scaler.transform(input_df)
         input_pca = pca.transform(input_scaled)
 
-        # Predict and convert to native int
+        # Prediction
         prediction = int(rf_model.predict(input_pca)[0])
-        predicted_label = label_mapping[prediction]
 
-        return jsonify({"prediction": predicted_label})
+        # Treat 0 as Benign, anything else as Malicious
+        label = "Benign" if prediction == 0 else "Malicious"
 
+        return jsonify({"prediction": label})
+    
     except Exception as e:
         return jsonify({"error": str(e)})
 
-# Run the Flask app
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
