@@ -7,11 +7,9 @@ LOG_GROUP_NAME = 'cloudloggroup'  # CloudWatch log group name
 LOG_STREAM_NAME = 'eni-051f33bea4b62cb7b-all'  # Log stream name
 FLASK_API_URL = 'http://16.16.253.44:5000/predict'  # Flask API endpoint
 REGION = 'eu-north-1'
-SECURITY_GROUP_ID = 'sg-0c40ee75327cf6eed'  # Your Security Group ID
 
-# ========== AWS CLIENTS ==========
+# ========== AWS CLIENT ==========
 logs_client = boto3.client('logs', region_name=REGION)
-ec2_client = boto3.client('ec2', region_name=REGION)
 
 # ========== FULL FEATURE SET ==========
 original_feature_columns = [
@@ -36,24 +34,12 @@ original_feature_columns = [
     "Idle Mean", "Idle Std", "Idle Max", "Idle Min"
 ]
 
-# ========== BLOCK MALICIOUS IP ==========
-def block_ip(ip_address):
-    try:
-        ec2_client.revoke_security_group_ingress(
-            GroupId=SECURITY_GROUP_ID,
-            IpProtocol='-1',
-            CidrIp=f"{ip_address}/32"
-        )
-        print(f"🚫 Blocked malicious IP via Security Group: {ip_address}")
-    except Exception as e:
-        print(f"❌ Failed to block IP {ip_address}: {e}")
-
 # ========== FETCH LOG EVENTS ==========
 def fetch_log_events():
     response = logs_client.get_log_events(
         logGroupName=LOG_GROUP_NAME,
         logStreamName=LOG_STREAM_NAME,
-        startFromHead=False  # Get latest logs
+        startFromHead=False
     )
     return [event['message'] for event in response['events']]
 
@@ -91,7 +77,7 @@ def parse_log_to_features(log_line):
         print(f"⚠️ Error parsing log line: {e}")
         return None, None
 
-# ========== PREDICT USING API ==========
+# ========== PREDICT ==========
 def predict_with_model(features):
     try:
         response = requests.post(FLASK_API_URL, json=features, timeout=5)
@@ -103,7 +89,7 @@ def predict_with_model(features):
     except Exception as e:
         return f"Request failed: {e}"
 
-# ========== MAIN LOOP ==========
+# ========== MAIN ==========
 if __name__ == "__main__":
     print("📡 Fetching VPC flow logs...")
     logs = fetch_log_events()
@@ -113,8 +99,4 @@ if __name__ == "__main__":
         if features:
             prediction = predict_with_model(features)
             print(f"🧠 Prediction: {prediction} | Source IP: {src_ip} | Log: {log}")
-
-            if prediction == "Malicious" and src_ip:
-                block_ip(src_ip)
-
-            time.sleep(1)  # Prevent API spamming
+        time.sleep(1)  # Optional delay
