@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import joblib
 import numpy as np
@@ -56,6 +56,14 @@ def predict():
     
     except Exception as e:
         return jsonify({"error": str(e)})
+    
+@app.route('/logs', methods=['GET'])
+def get_logs():
+    try:
+        with open("ids.log", "r") as f:
+            return jsonify({"logs": f.readlines()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
